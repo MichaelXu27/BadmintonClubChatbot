@@ -1,4 +1,9 @@
 const {SlashCommandBuilder} = require('discord.js');
+const {MongoClient} = require('mongodb');
+const { uri } = require('../../config.json');
+
+//create the mongo client
+const client = new MongoClient(uri);
 
 const todoLists = new Map();
 
@@ -38,36 +43,54 @@ module.exports = {
 
     async execute(interaction){
         const userId = interaction.user.id;
-
-        if(todoLists.has(userId) == false){
-            todoLists.set(userId, [])
-        }
-
         const subcommand = interaction.options.getSubcommand();
-        const todoList = todoLists.get(userId);
 
-        if(subcommand == 'add'){
-            const item = interaction.options.getString('item');
-            todoList.push(item);
-            await interaction.reply(`added "${item}" to your to-do list.`);
-        }else if (subcommand == 'remove'){
-            const index = interaction.options.getInteger('index') - 1;
-            if (index < 0 || index  >= todoList.length){
-                await interaction.reply('Invalid index. Please provide a valid item number.');
-                return
-            }else{
-                const itemToRemove = todoList.splice(index, 1);
-                await interaction.reply(`Removed "${itemToRemove}" from your to-do list.`);
+        try {
+            await client.connect();
+            const db = client.db('todoApp');
+            const todosCollection = db.collection('todos');
+
+            if (subcommand === 'add') {
+                const item = interaction.options.getString('item');
+                
+                // update document: push new item; create document if it doesn't exist
+                await todosCollection.updateOne(
+                    { userId },
+                    { $push: { todos: item } },
+                    { upsert: true }
+                );
+                await interaction.reply(`Added "${item}" to your to-do list.`);
+            } else if (subcommand === 'remove') {
+                const index = interaction.options.getInteger('index') - 1;
+                const userDoc = await todosCollection.findOne({ userId });
+                
+                if (!userDoc || !userDoc.todos || index < 0 || index >= userDoc.todos.length) {
+                    await interaction.reply('Invalid index. Please provide a valid item number.');
+                    return;
+                }
+                
+                // remove the item from the array
+                const removedItem = userDoc.todos[index];
+                userDoc.todos.splice(index, 1);
+                await todosCollection.updateOne(
+                    { userId },
+                    { $set: { todos: userDoc.todos } }
+                );
+                await interaction.reply(`Removed "${removedItem}" from your to-do list.`);
+            } else if (subcommand === 'list') {
+                const userDoc = await todosCollection.findOne({ userId });
+                if (!userDoc || !userDoc.todos || userDoc.todos.length === 0) {
+                    await interaction.reply('Your to-do list is empty.');
+                } else {
+                    const formattedList = userDoc.todos
+                        .map((item, i) => `${i + 1}. ${item}`)
+                        .join('\n');
+                    await interaction.reply(`Your to-do list:\n${formattedList}`);
+                }
             }
-        }else if (subcommand == 'list'){
-            if (todoList.length === 0) {
-                await interaction.reply('Your to-do list is empty.');
-            } else {
-                const formattedList = todoList
-                    .map((item, i) => `${i + 1}. ${item}`)
-                    .join('\n');
-                await interaction.reply(`Your to-do list:\n${formattedList}`);
-            }
+        } catch (error) {
+            console.error(error);
+            await interaction.reply(`An error occurred: ${error.message}`);
         }
     }
 }
