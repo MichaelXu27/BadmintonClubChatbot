@@ -34,7 +34,26 @@ module.exports = {
                 }
                 
                 message.member.setNickname(name)
-                    .then(() => message.reply(`Your name has been set to **${name}** ✅`))
+                    .then(async () => {
+                        // Remove Unverified role and add Verified role
+                        const unverifiedRole = message.guild.roles.cache.find(role => role.name === 'Unverified');
+                        const verifiedRole = message.guild.roles.cache.find(role => role.name === 'Verified');
+                        
+                        try {
+                            if (unverifiedRole && message.member.roles.cache.has(unverifiedRole.id)) {
+                                await message.member.roles.remove(unverifiedRole);
+                            }
+                            
+                            if (verifiedRole) {
+                                await message.member.roles.add(verifiedRole);
+                            }
+                            
+                            message.reply(`Your name has been set to **${name}** ✅ Welcome to the server!`);
+                        } catch (roleError) {
+                            console.error('Error managing roles:', roleError);
+                            message.reply(`Your name has been set to **${name}** ✅ (Note: There was an issue with role assignment)`);
+                        }
+                    })
                     .catch(err => {
                         console.error(err);
                         if (err.code === 50013) {
