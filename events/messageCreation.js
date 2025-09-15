@@ -37,7 +37,7 @@ module.exports = {
                     .then(async () => {
                         // Remove Unverified role and add Verified role
                         const unverifiedRole = message.guild.roles.cache.find(role => role.name === 'Unverified');
-                        const verifiedRole = message.guild.roles.cache.find(role => role.name === 'Verified');
+                        const verifiedRole = message.guild.roles.cache.find(role => role.name === 'member');
                         
                         try {
                             if (unverifiedRole && message.member.roles.cache.has(unverifiedRole.id)) {
